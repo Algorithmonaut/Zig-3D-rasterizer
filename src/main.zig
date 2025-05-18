@@ -23,15 +23,15 @@ const raster_height = @divFloor(window_height, downscale_factor);
 
 var triangle_1 = primitives.Triangle{ .vertices = .{
     primitives.Vertex{
-        .color = 0xFFFFFFFF,
+        .color = 0xFFFF0000,
         .pos = Point(i64, 2).init(.{ 20, 20 }),
     },
     primitives.Vertex{
-        .color = 0xFF0000FF,
+        .color = 0xFF00FF00,
         .pos = Point(i64, 2).init(.{ 100, 20 }),
     },
     primitives.Vertex{
-        .color = 0x00FF00FF,
+        .color = 0xFF0000FF,
         .pos = Point(i64, 2).init(.{ 140, 140 }),
     },
 } };
@@ -64,17 +64,18 @@ pub fn main() !void {
         @memset(buffer, 0);
 
         const bounding_box = triangle_1.get_triangle_bounding_box();
-        var start_scan = bounding_box[2] * raster_width + bounding_box[0];
-        var end_scan = bounding_box[3] * raster_width + bounding_box[1];
 
-        // Clip scan zone
-        if (start_scan > buffer.len) start_scan = @intCast(buffer.len);
-        if (end_scan > buffer.len) end_scan = @intCast(buffer.len);
+        var y = bounding_box[2];
+        while (y < bounding_box[3]) : (y += 1) {
+            var x = bounding_box[0];
+            while (x < bounding_box[1]) : (x += 1) {
+                const buffer_pos = y * raster_width + x;
+                if (x >= raster_width) break;
+                if (y >= raster_height) break;
 
-        var buffer_it: i64 = start_scan;
-        while (buffer_it < end_scan) : (buffer_it += 1) {
-            const color = triangle_1.is_pixel_in_triangle(Point(i64, 2).init(.{ @mod(buffer_it, raster_width), @divFloor(buffer_it, raster_width) })) orelse 0;
-            buffer[@intCast(buffer_it)] = color;
+                const color = triangle_1.is_pixel_in_triangle(Point(i64, 2).init(.{ x, y }));
+                if (color) |col| buffer[@intCast(buffer_pos)] = col;
+            }
         }
 
         triangle_1.vertices[2].pos.data[0] = @intCast(i % 4000);

@@ -24,53 +24,18 @@ pub const Triangle = struct {
         return [4]i64{ min_x, max_x, min_y, max_y };
     }
 
-    pub fn compute_signed_area(self: Triangle) f64 {
-        const A = &self.vertices[0];
-        const B = &self.vertices[1];
-        const C = &self.vertices[2];
+    pub fn edge_function(self: Triangle) f64 {
+        const A = self.vertices[0].pos;
+        const B = self.vertices[1].pos;
+        const C = self.vertices[2].pos;
 
-        const vector_AB = B.pos.substract(A.pos);
-        const vector_AC = C.pos.substract(A.pos);
+        const vector_AB = B.substract(A);
+        const vector_AC = C.substract(A);
 
         const cross = vector_AB.cross_2d(vector_AC);
-        const signed_area: f64 = @as(f64, @floatFromInt(cross)) / 2.0;
-
-        // std.debug.print("Area: {}\n", .{signed_area});
-
-        return signed_area;
+        const double_signed_area: f64 = @as(f64, @floatFromInt(cross));
+        return double_signed_area;
     }
-
-    // pub fn is_pixel_in_triangle(self: Triangle, pixel: Point(i64, 2)) ?u32 {
-    //     const vertex_P = Vertex{ .pos = pixel, .color = undefined };
-    //
-    //     const A = &self.vertices[0];
-    //     const B = &self.vertices[1];
-    //     const C = &self.vertices[2];
-    //
-    //     const triangle_PBC = Triangle{ .vertices = .{ B.*, C.*, vertex_P } };
-    //     const triangle_PCA = Triangle{ .vertices = .{ C.*, A.*, vertex_P } };
-    //     const triangle_PAB = Triangle{ .vertices = .{ A.*, B.*, vertex_P } };
-    //
-    //     const main_signed_area = self.compute_signed_area();
-    //     const main_area = @abs(main_signed_area);
-    //
-    //     if (main_area < 0.0001) {
-    //         return null; // Degenerate triangle
-    //     }
-    //
-    //     const u = triangle_PBC.compute_signed_area() / main_signed_area;
-    //     const v = triangle_PCA.compute_signed_area() / main_signed_area;
-    //     const w = triangle_PAB.compute_signed_area() / main_signed_area;
-    //
-    //
-    //
-    //     const epsilon = 0.001;
-    //     if (!((u >= -epsilon) and (v >= -epsilon) and (w >= -epsilon) and
-    //         (u + v + w >= 1.0 - epsilon) and (u + v + w <= 1.0 + epsilon))) return null;
-    //
-    //     const new_color: 32 = u * A.color + v * B.color + w * C.color;
-    //     return new_color;
-    // }
 
     pub fn is_pixel_in_triangle(self: Triangle, pixel: Point(i64, 2)) ?u32 {
         const vertex_P = Vertex{ .pos = pixel, .color = undefined };
@@ -81,64 +46,48 @@ pub const Triangle = struct {
 
         const triangle_PBC = Triangle{ .vertices = .{ B.*, C.*, vertex_P } };
         const triangle_PCA = Triangle{ .vertices = .{ C.*, A.*, vertex_P } };
-        const triangle_PAB = Triangle{ .vertices = .{ A.*, B.*, vertex_P } };
 
-        const main_signed_area = self.compute_signed_area();
-        const main_area = @abs(main_signed_area);
+        const main_signed_area = self.edge_function();
+        const inv_main_signed_area = 1 / main_signed_area;
 
-        if (main_area < 0.0001) {
-            return null; // Degenerate triangle
-        }
-
-        const u = triangle_PBC.compute_signed_area() / main_signed_area;
-        const v = triangle_PCA.compute_signed_area() / main_signed_area;
-        const w = triangle_PAB.compute_signed_area() / main_signed_area;
+        const u = triangle_PBC.edge_function() * inv_main_signed_area;
+        const v = triangle_PCA.edge_function() * inv_main_signed_area;
+        // const w = 1 - u - v;
 
         const epsilon = 0.001;
-        if (!(u >= -epsilon and v >= -epsilon and w >= -epsilon and
-            (u + v + w >= 1.0 - epsilon) and (u + v + w <= 1.0 + epsilon)))
-            return null;
+        if (u < -epsilon or v < -epsilon or u + v > 1.0 + epsilon) return null;
 
         // Extract color components (assuming 0xAARRGGBB format)
         const a_color = A.color;
         const b_color = B.color;
         const c_color = C.color;
 
-        const a_a = @as(f32, @floatFromInt((a_color >> 24) & 0xFF));
-        const a_r = @as(f32, @floatFromInt((a_color >> 16) & 0xFF));
-        const a_g = @as(f32, @floatFromInt((a_color >> 8) & 0xFF));
-        const a_b = @as(f32, @floatFromInt(a_color & 0xFF));
+        const ui = @as(u8, @intFromFloat(std.math.clamp(u * 255.0, 0.0, 255.0)));
+        const vi = @as(u8, @intFromFloat(std.math.clamp(v * 255.0, 0.0, 255.0)));
+        const wi = @as(u8, 255 - ui - vi);
 
-        const b_a = @as(f32, @floatFromInt((b_color >> 24) & 0xFF));
-        const b_r = @as(f32, @floatFromInt((b_color >> 16) & 0xFF));
-        const b_g = @as(f32, @floatFromInt((b_color >> 8) & 0xFF));
-        const b_b = @as(f32, @floatFromInt(b_color & 0xFF));
+        const mask_rb: u32 = 0x00FF00FF;
+        const mask_g: u32 = 0x0000FF00;
 
-        const c_a = @as(f32, @floatFromInt((c_color >> 24) & 0xFF));
-        const c_r = @as(f32, @floatFromInt((c_color >> 16) & 0xFF));
-        const c_g = @as(f32, @floatFromInt((c_color >> 8) & 0xFF));
-        const c_b = @as(f32, @floatFromInt(c_color & 0xFF));
+        const ARB = a_color & mask_rb;
+        const BRB = b_color & mask_rb;
+        const CRB = c_color & mask_rb;
 
-        // Interpolate each component
-        const interp_a = u * a_a + v * b_a + w * c_a;
-        const interp_r = u * a_r + v * b_r + w * c_r;
-        const interp_g = u * a_g + v * b_g + w * c_g;
-        const interp_b = u * a_b + v * b_b + w * c_b;
+        const rb_interpolated = (@as(u32, ARB) * @as(u32, ui) +
+            @as(u32, BRB) * @as(u32, vi) +
+            @as(u32, CRB) * @as(u32, wi)) >> 8;
 
-        // Clamp to 0-255 and convert to u8
-        const new_a = @as(u8, @intFromFloat(std.math.clamp(interp_a, 0, 255))); // Fixed parentheses
-        const new_r = @as(u8, @intFromFloat(std.math.clamp(interp_r, 0, 255))); // Fixed parentheses
-        const new_g = @as(u8, @intFromFloat(std.math.clamp(interp_g, 0, 255))); // Fixed parentheses
-        const new_b = @as(u8, @intFromFloat(std.math.clamp(interp_b, 0, 255))); // Fixed parentheses
+        const AG = (a_color & mask_g) >> 8;
+        const BG = (b_color & mask_g) >> 8;
+        const CG = (c_color & mask_g) >> 8;
 
-        // Pack into u32 (0xAARRGGBB)
-        const new_color = (@as(u32, new_a) << 24) |
-            (@as(u32, new_r) << 16) |
-            (@as(u32, new_g) << 8) |
-            new_b;
+        const g_interpolated = (@as(u32, AG) * @as(u32, ui) +
+            @as(u32, BG) * @as(u32, vi) +
+            @as(u32, CG) * @as(u32, wi)) >> 8;
 
-        return new_color;
+        const g_shifted_back = g_interpolated << 8;
+
+        const result_color = (rb_interpolated & mask_rb) | g_shifted_back;
+        return @as(u32, @intCast(result_color));
     }
 };
-
-pub fn main() void {}
