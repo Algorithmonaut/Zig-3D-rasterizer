@@ -62,9 +62,10 @@ pub const Triangle = struct {
         const b_color = B.color;
         const c_color = C.color;
 
-        const ui = @as(u8, @intFromFloat(std.math.clamp(u * 255.0, 0.0, 255.0)));
-        const vi = @as(u8, @intFromFloat(std.math.clamp(v * 255.0, 0.0, 255.0)));
-        const wi = @as(u8, 255 - ui - vi);
+        // NOTE: idk if I should prefer u16 or u8
+        const ui = @as(u16, @intFromFloat(std.math.clamp(u * 255.0, 0.0, 255.0)));
+        const vi = @as(u16, @intFromFloat(std.math.clamp(v * 255.0, 0.0, 255.0)));
+        const wi = @as(u16, 255 - ui - vi);
 
         const mask_rb: u32 = 0x00FF00FF;
         const mask_g: u32 = 0x0000FF00;
